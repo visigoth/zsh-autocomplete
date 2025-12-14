@@ -96,7 +96,15 @@ EOF
 
     compstate[insert]=automenu-unambiguous  # To get `all-expansions` from _expand.
     compstate[last_prompt]=yes  # Completion doesn't stay on the same command line without this.
-    compstate[list]='list force packed rows' # `_setup` doesn't work well for this.
+
+    # Use 'packed rows' for horizontal layout, plain 'list force' for vertical
+    local _vert_mode_=no
+    builtin zstyle -s ':autocomplete:*' vertical _vert_mode_
+    if [[ $_vert_mode_ == yes ]]; then
+      compstate[list]='list force'
+    else
+      compstate[list]='list force packed rows'
+    fi
     unset 'compstate[vared]'
 
     local +h -a  compprefuncs=( autocomplete:_main_complete:new:pre  "$compprefuncs[@]" )

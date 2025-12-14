@@ -524,6 +524,15 @@ ${0}:precmd() {
 .autocomplete:async:compadd() {
   setopt localoptions multibyte
 
+  # Check if vertical mode is enabled
+  local _vertical_enabled_=no
+  builtin zstyle -s ':autocomplete:*' vertical _vertical_enabled_
+
+  if [[ $_vertical_enabled_ == yes ]]; then
+    .autocomplete:async:compadd:vertical "$@"
+    return
+  fi
+
   local -A _opts_=()
   local -a _xopts_=() _displ_=() _matches_=()
   local -P _displ_name_= _matches_name_=
@@ -690,4 +699,164 @@ ${0}:precmd() {
 .autocomplete:async:compadd:disable() {
   typeset -g _autocomplete__partial_list=$curtag
   comptags() { false }  # Stop completion from trying more tags.
+}
+
+# Vertical layout compadd - formats completions in a styled box
+.autocomplete:async:compadd:vertical() {
+  setopt localoptions multibyte
+
+  local -A _opts_=()
+  local -a _matches_=() _displ_=()
+  local -P _displ_name_= _matches_name_=
+
+  zparseopts -A _opts_ -E -- D: E: O: J: V: X: x: d: l
+
+  # Handle -D/-O query modes - just pass through
+  if [[ -n $_opts_[-D]$_opts_[-O] ]]; then
+    builtin compadd "$@"
+    return
+  fi
+
+  # We already ran out of space
+  if [[ -v _autocomplete__partial_list ]]; then
+    return 1
+  fi
+
+  # Get max items setting
+  local -i _max_items_=10
+  builtin zstyle -s ':autocomplete:*' vertical-max-items _max_items_
+
+  # Get max width setting (0 = auto)
+  local -i _max_width_=0
+  builtin zstyle -s ':autocomplete:*' vertical-max-width _max_width_
+  (( _max_width_ == 0 )) && (( _max_width_ = COLUMNS - 4 ))
+  (( _max_width_ > COLUMNS - 2 )) && (( _max_width_ = COLUMNS - 2 ))
+
+  # Get color settings
+  local _color_bg_=236 _color_fg_=252 _color_cat_=245 _color_match_=81
+  builtin zstyle -s ':autocomplete:*' vertical-color-bg _color_bg_
+  builtin zstyle -s ':autocomplete:*' vertical-color-fg _color_fg_
+  builtin zstyle -s ':autocomplete:*' vertical-color-category _color_cat_
+  builtin zstyle -s ':autocomplete:*' vertical-color-match _color_match_
+
+  # Parse display string options
+  local -a _dopt_=()
+  local -a _remaining_args_=()
+  zparseopts -a _dopt_ -D -E -K -- d: ld:
+  _remaining_args_=( "$@" )
+
+  _displ_name_=${_dopt_[2]:-}
+
+  # Collect matches
+  builtin compadd -O _matches_ "${_remaining_args_[@]}"
+
+  (( $#_matches_ == 0 )) && return 1
+
+  # Get display strings if provided, otherwise use matches
+  if [[ -n $_displ_name_ ]]; then
+    _displ_=( "${(P@)_displ_name_}" )
+  else
+    _displ_=( "${_matches_[@]}" )
+  fi
+
+  # Determine category letter based on current tag
+  local _category_=' '
+  if [[ -v curtag ]]; then
+    _category_=${_autocomplete__category_map[$curtag]:-}
+    [[ -z $_category_ ]] && _category_=' '
+  fi
+
+  # Calculate the widest item (for box width)
+  local -i _box_width_=0
+  local _item_
+  for _item_ in "${_displ_[@]}"; do
+    # Strip any existing formatting/descriptions after colon
+    local _clean_=${_item_%%:*}
+    _clean_=${_clean_%%$'\0'*}
+    (( ${#_clean_} > _box_width_ )) && (( _box_width_ = ${#_clean_} ))
+  done
+
+  # Add space for category letter and padding
+  (( _box_width_ += 3 ))  # category + space + right padding
+
+  # Clamp to max width
+  (( _box_width_ > _max_width_ )) && (( _box_width_ = _max_width_ ))
+  (( _box_width_ < 10 )) && (( _box_width_ = 10 ))
+
+  # Check how many lines we have left
+  local -Pi _unused_lines_=$(( _autocomplete__max_lines - compstate[list_lines] ))
+
+  # Limit items to fit
+  local -i _n_items_=$#_matches_
+  (( _n_items_ > _max_items_ )) && (( _n_items_ = _max_items_ ))
+  (( _n_items_ > _unused_lines_ - 1 )) && (( _n_items_ = _unused_lines_ - 1 ))
+  (( _n_items_ < 1 )) && (( _n_items_ = 1 ))
+
+  # Build ANSI escape sequences
+  local _esc_bg_=$'\e[48;5;'${_color_bg_}'m'
+  local _esc_fg_=$'\e[38;5;'${_color_fg_}'m'
+  local _esc_cat_=$'\e[38;5;'${_color_cat_}'m'
+  local _esc_match_=$'\e[38;5;'${_color_match_}'m'
+  local _esc_reset_=$'\e[0m'
+
+  # Get the prefix for match highlighting
+  local _prefix_=$PREFIX
+
+  # Format display strings with box styling
+  local -a _formatted_=()
+  local -a _limited_matches_=()
+  local -i _i_
+  for (( _i_ = 1; _i_ <= _n_items_ && _i_ <= $#_matches_; _i_++ )); do
+    local _match_=${_matches_[_i_]}
+    local _disp_=${_displ_[_i_]}
+
+    # Clean display string (remove description after colon)
+    local _clean_disp_=${_disp_%%:*}
+    _clean_disp_=${_clean_disp_%%$'\0'*}
+
+    # Calculate content width (without category letter and spaces)
+    local -i _content_width_=$(( _box_width_ - 3 ))
+
+    # Truncate if too long
+    if (( ${#_clean_disp_} > _content_width_ )); then
+      _clean_disp_=${_clean_disp_[1,_content_width_-1]}…
+    fi
+
+    # Highlight matching portion
+    local _formatted_text_=$_clean_disp_
+    if [[ -n $_prefix_ ]]; then
+      local _lower_disp_=${(L)_clean_disp_}
+      local _lower_prefix_=${(L)_prefix_}
+      if [[ $_lower_disp_ == ${_lower_prefix_}* ]]; then
+        local -i _plen_=${#_prefix_}
+        local _match_part_=${_clean_disp_[1,_plen_]}
+        local _rest_part_=${_clean_disp_[_plen_+1,-1]}
+        _formatted_text_="${_esc_match_}${_match_part_}${_esc_fg_}${_rest_part_}"
+      fi
+    fi
+
+    # Calculate padding
+    local -i _pad_len_=$(( _content_width_ - ${#_clean_disp_} ))
+    (( _pad_len_ < 0 )) && (( _pad_len_ = 0 ))
+    local _padding_=${(l:_pad_len_:: :)}
+
+    # Build the formatted display string with box styling
+    # Format: [bg][cat_color]X [fg]text[padding][reset]
+    local _final_="${_esc_bg_}${_esc_cat_}${_category_} ${_esc_fg_}${_formatted_text_}${_padding_} ${_esc_reset_}"
+
+    _formatted_+=( "$_final_" )
+    _limited_matches_+=( "$_match_" )
+  done
+
+  # Check if we truncated
+  if (( $#_matches_ > _n_items_ )); then
+    .autocomplete:async:compadd:disable
+  fi
+
+  # Add completions with formatted display strings
+  if (( $#_limited_matches_ > 0 )); then
+    # Use -l to force one completion per line, -d for display strings
+    _autocomplete__compadd_opts_len "${_remaining_args_[@]}"
+    builtin compadd -l -d _formatted_ -a "${_remaining_args_[@][1,?]}" _limited_matches_
+  fi
 }
