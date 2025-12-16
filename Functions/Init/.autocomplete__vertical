@@ -1,0 +1,90 @@
+#!/bin/zsh
+# Vertical completion layout with box display and category markers
+zmodload -F zsh/zutil b:zstyle
+
+# Default configuration for vertical layout
+() {
+  # Enable vertical layout (set to 'yes' to use vertical box layout)
+  builtin zstyle ':autocomplete:*' vertical no
+
+  # Maximum number of completions to show
+  builtin zstyle ':autocomplete:*' vertical-max-items 10
+
+  # Maximum width for the completion box (0 = auto based on terminal)
+  builtin zstyle ':autocomplete:*' vertical-max-width 0
+
+  # Colors (256-color palette indices)
+  builtin zstyle ':autocomplete:*' vertical-color-bg '236'           # Box background (dark gray)
+  builtin zstyle ':autocomplete:*' vertical-color-fg '252'           # Default text (light gray)
+  builtin zstyle ':autocomplete:*' vertical-color-category '245'     # Category letter (dim)
+  builtin zstyle ':autocomplete:*' vertical-color-match '81'         # Matching portion (cyan)
+  builtin zstyle ':autocomplete:*' vertical-color-selected-bg '24'   # Selected item bg
+  builtin zstyle ':autocomplete:*' vertical-color-selected-fg '255'  # Selected item fg
+}
+
+# Category letter mapping based on completion tags/groups
+typeset -gA _autocomplete__category_map=(
+  # Files and directories
+  'files'               'f'
+  'globbed-files'       'f'
+  'all-files'           'f'
+  'directories'         'd'
+  'local-directories'   'd'
+  'named-directories'   '~'
+  'directory-stack'     '~'
+  'executables'         'x'
+  'paths'               'p'
+
+  # Commands
+  'commands'            'c'
+  'aliases'             'a'
+  'suffix-aliases'      'a'
+  'functions'           'λ'
+  'builtins'            'b'
+  'reserved-words'      'r'
+
+  # History
+  'history-lines'       'h'
+  'history'             'h'
+
+  # Options and arguments
+  'options'             '-'
+  'arguments'           '>'
+  'values'              '='
+
+  # Git related
+  'commits'             '#'
+  'heads'               '⎇'
+  'tags'                't'
+  'remotes'             'R'
+  'recent-branches'     '⎇'
+
+  # Variables and parameters
+  'parameters'          '$'
+  'environment'         'E'
+
+  # Expansions
+  'expansions'          '*'
+  'all-expansions'      '*'
+
+  # Corrections
+  'corrections'         '?'
+  'original'            '.'
+
+  # Process related
+  'jobs'                'j'
+  'processes'           'P'
+  'pids'                'P'
+
+  # Users and hosts
+  'users'               '@'
+  'hosts'               'H'
+
+  # Default fallback
+  'default'             ' '
+)
+
+${0}:precmd() {
+  # Nothing needed in precmd for now
+  :
+}

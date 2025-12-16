@@ -136,8 +136,18 @@ builtin zstyle ':completion:*' auto-description '%d'
 builtin zstyle ':completion:*:parameters' extra-verbose yes
 builtin zstyle ':completion:*:default' select-prompt '%F{black}%K{12}line %l %p%f%k'
 
-builtin zstyle ':completion:*' insert-sections yes
-builtin zstyle ':completion:*' separate-sections yes
+# Section headers - disabled in vertical mode since we use inline category markers
+local _vertical_mode_=no
+builtin zstyle -s ':autocomplete:*' vertical _vertical_mode_
+if [[ $_vertical_mode_ != yes ]]; then
+  builtin zstyle ':completion:*' insert-sections yes
+  builtin zstyle ':completion:*' separate-sections yes
+else
+  builtin zstyle ':completion:*' insert-sections no
+  builtin zstyle ':completion:*' separate-sections no
+  builtin zstyle ':completion:*:descriptions' format ''
+  builtin zstyle ':completion:*:-command-:*' format ''
+fi
 
 # Needed for _gnu_generic to prevent descriptions from getting cropped.
 is-at-least 5.9 ||
