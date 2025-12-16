@@ -4,8 +4,8 @@ zmodload -F zsh/zutil b:zstyle
 
 # Default configuration for vertical layout
 () {
-  # Enable vertical layout (set to 'no' to use traditional horizontal layout)
-  builtin zstyle ':autocomplete:*' vertical yes
+  # Enable vertical layout (set to 'yes' to use vertical box layout)
+  builtin zstyle ':autocomplete:*' vertical no
 
   # Maximum number of completions to show
   builtin zstyle ':autocomplete:*' vertical-max-items 10
